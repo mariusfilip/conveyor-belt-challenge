@@ -4,6 +4,10 @@ from constants import EMPTY, FINISHED, ASSEMBLY_DURATION
 
 class TestWorker(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        print('Testing Worker class...')
+
     def setUp(self):
         self.slots = [EMPTY, 'A', 'B', EMPTY]
         self.worker = Worker(index=1, pos=Worker.UP, slots=self.slots)

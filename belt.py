@@ -1,6 +1,6 @@
 import random
 
-from constants import EMPTY, COMPONENTS
+from constants import EMPTY, COMPONENTS, FINISHED
 from workers import Worker, WorkerPair
 
 
@@ -12,9 +12,36 @@ class Belt:
     """
     _CHOICES: str = COMPONENTS + EMPTY
 
-    def __init__(self, size: int):
+    def __init__(self, size: int, pretty_print: bool = False):
         self.slots: list[str] = [Worker.EMPTY] * size
         self.pairs: list[WorkerPair] = [WorkerPair(i, self.slots) for i in range(size)]
+        self.pretty_print: bool = pretty_print
+
+    def pre_fill(self):
+        """
+        Fill the belt with random components, initially.
+        """
+        for _ in range(len(self.slots)):
+            self._shift(refill=True)
+
+    def work(self, ticks: int) -> (dict[str, int], int):
+        """
+        Make the belt work for a number of ticks.
+        :param ticks: how many ticks to work.
+        :return: number of components and finished products produced and how many times the belt changed.
+        """
+        result: dict[str, int] = {}
+        for c in COMPONENTS + [FINISHED]:
+            result[c] = 0
+        changes: int = 0
+        self._print(0)
+        for i in range(ticks):
+            component, changed = self._tick()
+            result[component] += 1
+            if changed:
+                changes += 1
+            self._print(i+1)
+        return result, changes
 
     def _tick(self) -> (str, bool):
         """
@@ -39,3 +66,14 @@ class Belt:
         if refill:
             self.slots[0] = random.choice(self._CHOICES)
         return result
+
+    def _print(self, tick: int):
+        if self.pretty_print:
+            char_matrix: list[list[str]] = self._get_char_matrix()
+            lines: list[str] = [Worker.SEP.join(row) for row in char_matrix]
+            if tick > 0:
+                print(f'Tick {tick}:')
+            else:
+                print('Initial state:')
+            for line in lines:
+                print(line)

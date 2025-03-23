@@ -1,9 +1,13 @@
 import random
 import unittest
 from workers import Worker, WorkerPair
-from constants import EMPTY, FINISHED
+from constants import EMPTY
 
 class TestWorkerPair(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        print('Testing WorkerPair class...')
 
     def setUp(self):
         self.slots = [EMPTY, 'A', 'B', EMPTY]
