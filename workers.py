@@ -4,8 +4,8 @@ from enum import Enum
 
 from constants import EMPTY, ASSEMBLY_DURATION, FINISHED
 
-
 _logger = logging.getLogger(__name__)
+
 
 class Worker:
     """
@@ -15,7 +15,8 @@ class Worker:
     # Constants for the worker's position.
     UP: str = '^'
     DOWN: str = 'v'
-    SEP: str = '|'
+    V_SEP: str = '|'
+    H_SEP: str = '-'
 
     class State(Enum):
         """
@@ -62,9 +63,59 @@ class Worker:
         assert pos in (self.UP, self.DOWN)
 
     def __str__(self):
-        hands: str = '' if self.left_hand == EMPTY and self.right_hand == EMPTY else f"{self.SEP}{self.left_hand},{self.right_hand}"
-        asm: str = '' if not self.state == Worker.State.ASSEMBLING else f'{self.SEP}{self.assembly_remaining}'
-        return f'{self.pos}{self.SEP}{self.index}{hands}{asm}'
+        hands: str = '' if self.left_hand == EMPTY and self.right_hand == EMPTY else f"{self.V_SEP}{self.left_hand},{self.right_hand}"
+        asm: str = '' if not self.state == Worker.State.ASSEMBLING else f'{self.V_SEP}{self.assembly_remaining}'
+        return f'{self.pos}{self.V_SEP}{self.index}{hands}{asm}'
+
+    def get_width(self, tokens: bool = False) -> int:
+        """
+        Get the width of the worker's string representation.
+        :param tokens: whether to count the tokens separately or not.
+        :return: the width of the worker's string representation.
+        """
+        if tokens:
+            return max(len(t) for t in self.get_tokens())
+        return len(str(self))
+
+    def get_height(self, tokens: bool = False) -> int:
+        """
+        Get the height of the worker's string representation.
+        :param tokens: whether to count the tokens separately or not. If True, then the tokens are considered vertically.
+        :return: the height of the worker's string representation.
+        """
+        if tokens:
+            return len(self.get_tokens())
+        return 1
+
+    def get_tokens(self, reverse: bool = False) -> list[str]:
+        """
+        Get the tokens of the worker's string representation.
+        :return: the tokens of the worker's string representation.
+        """
+        result: list[str] = list(str(self).split(self.V_SEP))
+        if reverse:
+            result.reverse()
+        return result
+
+    @property
+    def priority(self) -> int:
+        """
+        Get the priority of the worker.
+        :return: the priority of the worker.
+        """
+        result = 0
+        if self.left_hand != EMPTY:
+            result += 1
+        if self.right_hand != EMPTY:
+            result += 1
+        match self.state:
+            case Worker.State.ASSEMBLING:
+                result += 1 + ASSEMBLY_DURATION - self.assembly_remaining
+            case Worker.State.LEFT_EMPTY_RIGHT_FINISHED:
+                result += 1 + ASSEMBLY_DURATION + 1
+            case Worker.State.LEFT_FULL_RIGHT_FINISHED:
+                result += 1 + ASSEMBLY_DURATION + 2
+        return result
 
     def work(self) -> bool:
         """
@@ -180,7 +231,7 @@ class Worker:
         :return: True if the worker set the finished product back onto the assembly line, False otherwise.
         """
         if self.slots[self.index] == EMPTY:
-            assert not hold_left or self.right_hand == FINISHED # If holding the left hand, then the right hand must be holding the finished product.
+            assert not hold_left or self.right_hand == FINISHED  # If holding the left hand, then the right hand must be holding the finished product.
             self.slots[self.index] = FINISHED
             self.right_hand = EMPTY
             if hold_left:
@@ -195,9 +246,13 @@ class WorkerPair:
     """
     A pair of workers, one going up and the other going down compared to the conveyor belt.
     """
+
     def __init__(self, index: int, slots: list[str]):
         self.up = Worker(index, Worker.UP, slots)
         self.down = Worker(index, Worker.DOWN, slots)
+
+    def __str__(self):
+        return f'{self.up}/{self.down}'
 
     def work(self) -> bool:
         """
@@ -206,8 +261,9 @@ class WorkerPair:
         """
         workers: list[Worker] = [self.up, self.down]
         shuffled: list[Worker] = random.sample(workers, len(workers))
+        prioritised: list[Worker] = sorted(shuffled, key=lambda w: w.priority, reverse=True)
         result: bool = False
-        for worker in shuffled:
+        for worker in prioritised:
             if worker.work():
                 result = True
                 break
