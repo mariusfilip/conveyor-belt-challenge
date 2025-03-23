@@ -12,6 +12,8 @@ class Belt:
     It contains a list of slots that can hold components and finished products and a list of worker pairs that can assemble components.
     """
     _CHOICES: str = COMPONENTS + EMPTY
+    UPPER_SEP: str = '+'
+    LOWER_SEP: str = '~'
 
     def __init__(self, size: int, pretty_print: bool = False, offset: int = 2):
         """
@@ -21,7 +23,8 @@ class Belt:
         :param offset: the number of spaces to add before each line.
         """
         self.slots: list[str] = [EMPTY] * size
-        self.pairs: list[WorkerPair] = [WorkerPair(i, self.slots) for i in range(size)]
+        self.touched: list[bool] = [False] * size
+        self.pairs: list[WorkerPair] = [WorkerPair(i, self.slots, self.touched) for i in range(size)]
         self.pretty_print: bool = pretty_print
         self.offset: int = offset
 
@@ -36,68 +39,103 @@ class Belt:
         """
         Make the belt work for a number of ticks.
         :param ticks: how many ticks to work.
-        :return: number of components and finished products produced and how many times the belt changed.
+        :return: a (d, c) pair where 'd' is a dictionary with the number of untouched components and finished products produced and 'c' is the number of changes in the belt.
         """
         result: dict[str, int] = {}
         for c in COMPONENTS + FINISHED:
             result[c] = 0
         changes: int = 0
-        self._print(0)
+        self._print(0, ticks)
         for i in range(ticks):
-            c, changed = self._tick()
-            if c != EMPTY:
-                result[c] += 1
+            in_c, changed, out_c, out_touched = self._tick()
+            if out_c != EMPTY and (not out_touched or out_c == FINISHED):
+                result[out_c] += 1
             if changed:
                 changes += 1
-            self._print(i + 1, c)
+            self._print(i + 1, ticks, in_c, out_c, out_touched)
         return result, changes
 
-    def _tick(self) -> (str, bool):
+    def get_in_progress(self) -> dict[str, int]:
+        """
+        Get the number of untouched components in progress in the workers.
+        :return: a dictionary with the number of components or finished products on the conveyor belt.
+        """
+        result: dict[str, int] = {}
+        for c in COMPONENTS + FINISHED:
+            result[c] = 0
+        for i in range(len(self.slots)):
+            if self.slots[i] != EMPTY and (not self.touched[i] or self.slots[i] == FINISHED):
+                result[self.slots[i]] += 1
+        return result
+
+    def _tick(self) -> (str, bool, str):
         """
         Make the belt tick.
-        :return: a tuple of the component that was in the last slot and whether the belt changed.
+        :return: an (in, chg, out, touched) tuple where 'in' is the component that entered the belt, 'chg' is whether the belt changed, 'out' is the component that left
+        the belt, and 'touched' is whether the component that left the belt was touched by a worker.
         """
-        result: str = self._shift()
-        shuffled: list[str] = random.sample(self.pairs, len(self.pairs))
+        in_c, out_c, out_touched = self._shift()
+        shuffled: list[WorkerPair] = random.sample(self.pairs, len(self.pairs))
+        prioritized: list[WorkerPair] = sorted(shuffled, key=lambda p: p.priority, reverse=True)
         changed: bool = False
-        for pair in shuffled:
-            changed = pair.work() or changed
-        return result, changed
+        for pair in prioritized:
+            if pair.work():
+                changed = True
+        return in_c, changed, out_c, out_touched
 
-    def _shift(self, refill: bool = True) -> str:
+    def _shift(self, refill: bool = True) -> (str, str, bool):
         """
         Shift the belt by one slot.
         :param refill: True whether to refill the first slot with a random component, False if filling it with an empty slot.
-        :return: the component that was in the last slot.
+        :return: an (in, out, touched) tuple where 'in' is the component that entered the belt, 'out' is the component that left the belt, and 'touched' is whether the
+        component that left the belt was touched by a worker.
         """
-        result: str = self.slots[-1]
+        out: str = self.slots[-1]
+        touched: bool = self.touched[-1]
         for i in range(len(self.slots), 0, -1):
             j = i - 1
             self.slots[j] = self.slots[j - 1]
+            self.touched[j] = self.touched[j - 1]
         if refill:
             self.slots[0] = random.choice(self._CHOICES)
         else:
             self.slots[0] = EMPTY
-        return result
+        self.touched[0] = False
+        return self.slots[0], out, touched
 
-    def _print(self, tick: int, generated: str = EMPTY):
+    def _print(self, tick: int, ticks: int, inserted: str = EMPTY, generated: str = EMPTY, touched: bool = False):
         """
         Print the belt and the workers.
         :param tick: the current tick. 0 means initial state.
+        :param ticks: the total number of ticks.
+        :param inserted: the component that was inserted into the belt on the last tick.
         :param generated: the component or product that was generated in the last tick, if any.
+        :param touched: whether the generated component was touched by a worker.
         :return:
         """
         if self.pretty_print:
+            w: int = 0
             char_matrix: list[list[str]] = self._get_char_matrix()
             lines: list[str] = [''.join(row) for row in char_matrix]
             if tick > 0:
                 print(f'Tick {tick}:')
             else:
                 print('Initial state:')
+            if inserted != EMPTY:
+                s: str = f'Inserted: {inserted}'
+                print(s)
+                w = max(w, len(s))
             for line in lines:
                 print(' ' * self.offset + line)
+                w = max(w, self.offset + len(line))
             if generated != EMPTY:
-                print(f'Generated: {generated}')
+                s: str = f'Generated: {generated}'
+                if generated != FINISHED:
+                    s += f' (touched by a worker: {touched})'
+                print(s)
+                w = max(w, len(s))
+            if tick + 1 < ticks:
+                print('=' * w)
 
     def _get_char_matrix(self) -> list[list[str]]:
         """
@@ -112,6 +150,7 @@ class Belt:
             """
             ret: list[list[str]] = []
             max_w_width: int = max(w.get_width(tokens=True) for p in self.pairs for w in (p.up, p.down))
+            max_w_width = max(1, max_w_width)
             max_w_upper_height: int = max(p.up.get_height(tokens=True) for p in self.pairs)
             max_w_lower_height: int = max(p.down.get_height(tokens=True) for p in self.pairs)
             width: int = (1 + 1 + max_w_width + 1) * len(self.slots) + 1  # sep+space+token+space for each worker + rightmost sep
@@ -131,24 +170,25 @@ class Belt:
             for i, c in enumerate(str(x)):
                 matrix[row][col + i] = c
 
-        def fill_belt(matrix: list[list[str]], max_worker_width: int, centre_row: int):
+        def fill_belt(matrix: list[list[str]], max_w_width: int, centre_row: int):
             """
             Fill the conveyor belt in the character matrix.
             :param matrix: character matrix to fill.
-            :param max_worker_width: maximum width of a worker.
+            :param max_w_width: maximum width of a worker.
             :param centre_row: row where the belt is.
             """
             # Upper horizontal line
-            print_at(matrix, centre_row - 1, 0, Worker.H_SEP * len(matrix[centre_row]))
+            print_at(matrix, centre_row - 1, 0, self.UPPER_SEP * len(matrix[centre_row]))
             # The belt slots
             x = 0
             for c in self.slots:
                 print_at(matrix, centre_row, x, Worker.V_SEP)
-                print_at(matrix, centre_row, x + 1 + 1, c)  # space + component + space
-                x += max_worker_width
+                x += 1 + 1  # separator + space
+                print_at(matrix, centre_row, x, c)  # space + component + space
+                x += max_w_width + 1  # worker token + space
             matrix[centre_row][-1] = Worker.V_SEP  # Rightmost sep
             # Lower horizontal line
-            print_at(matrix, centre_row + 1, 0, Worker.H_SEP * len(matrix[centre_row]))
+            print_at(matrix, centre_row + 1, 0, self.LOWER_SEP * len(matrix[centre_row]))
 
         def fill_worker(matrix: list[list[str]], worker: Worker, max_w_width: int, centre_row: int):
             """

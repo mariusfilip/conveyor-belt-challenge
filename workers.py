@@ -50,11 +50,23 @@ class Worker:
         # The worker has both hands full: a component in the left hand and the finished product in the right hand.
         #
         LEFT_FULL_RIGHT_FINISHED: int = LEFT_EMPTY_RIGHT_FINISHED + 1
+        #
+        # The worker has both hands full and the same type of component in both hands.
+        #
+        LEFT_FULL_RIGHT_FULL_SAME_COMPONENT: int = LEFT_FULL_RIGHT_FINISHED + 1
 
-    def __init__(self, index: int, pos: str, slots: list[str]):
+    def __init__(self, index: int, pos: str, slots: list[str], touched: list[bool]):
+        """
+        Create a worker.
+        :param index: place of the worker on the conveyor belt. 0 means the first slot.
+        :param pos: position of the worker compared to the conveyor belt. UP means the worker is above the conveyor belt, DOWN means below.
+        :param slots: the list of components (or empty slots) on the conveyor belt.
+        :param touched: the list of flags indicating whether the corresponding slot has been touched by the worker or not.
+        """
         self.index = index
         self.pos = pos
         self.slots = slots
+        self.touched = touched
         self.left_hand: str = EMPTY
         self.right_hand: str = EMPTY
         self.assembly_remaining: int = 0
@@ -74,7 +86,7 @@ class Worker:
         :return: the width of the worker's string representation.
         """
         if tokens:
-            return max(len(t) for t in self.get_tokens())
+            return max(len(t) for t in self.get_tokens()) if self.get_tokens() else 0
         return len(str(self))
 
     def get_height(self, tokens: bool = False) -> int:
@@ -87,12 +99,16 @@ class Worker:
             return len(self.get_tokens())
         return 1
 
-    def get_tokens(self, reverse: bool = False) -> list[str]:
+    def get_tokens(self, reverse: bool = False, keep_index_pos: bool = False) -> list[str]:
         """
         Get the tokens of the worker's string representation.
         :return: the tokens of the worker's string representation.
         """
         result: list[str] = list(str(self).split(self.V_SEP))
+        if keep_index_pos:
+            pass
+        else:
+            result = result[2:]
         if reverse:
             result.reverse()
         return result
@@ -103,7 +119,7 @@ class Worker:
         Get the priority of the worker.
         :return: the priority of the worker.
         """
-        result = 0
+        result = 1
         if self.left_hand != EMPTY:
             result += 1
         if self.right_hand != EMPTY:
@@ -111,10 +127,12 @@ class Worker:
         match self.state:
             case Worker.State.ASSEMBLING:
                 result += 1 + ASSEMBLY_DURATION - self.assembly_remaining
-            case Worker.State.LEFT_EMPTY_RIGHT_FINISHED:
+            case Worker.State.LEFT_FULL_RIGHT_FULL_SAME_COMPONENT:
                 result += 1 + ASSEMBLY_DURATION + 1
-            case Worker.State.LEFT_FULL_RIGHT_FINISHED:
+            case Worker.State.LEFT_EMPTY_RIGHT_FINISHED:
                 result += 1 + ASSEMBLY_DURATION + 2
+            case Worker.State.LEFT_FULL_RIGHT_FINISHED:
+                result += 1 + ASSEMBLY_DURATION + 3
         return result
 
     def work(self) -> bool:
@@ -178,6 +196,10 @@ class Worker:
                     if self._set_finished(hold_left=True):
                         _logger.debug(f'Worker ({self}) set the finished product back on the assembly line')
                         self.state = self.State.READY
+                    elif self._swap():
+                        _logger.debug(f'Worker ({self}) swapped the finished product with the component on the conveyor belt')
+                        assert self.left_hand != EMPTY and self.right_hand == EMPTY
+                        self.state = self.State.LEFT_FULL
                     elif self._get_left():
                         _logger.debug(f'Worker ({self}) got with left hand')
                         self.state = self.State.LEFT_FULL_RIGHT_FINISHED
@@ -193,10 +215,28 @@ class Worker:
                                  f'If succeeded, then will be ready to pick up a new component with the right hand ...')
                     if self._set_finished(hold_left=True):
                         self.state = self.State.LEFT_FULL
+                    elif self._swap():
+                        _logger.debug(f'Worker ({self}) swapped the finished product with the component on the conveyor belt')
+                        if self.left_hand == self.right_hand:
+                            self.state = self.State.LEFT_FULL_RIGHT_FULL_SAME_COMPONENT
+                        else:
+                            _logger.debug(f'Worker ({self}) has full hands with different components, starting assembling ...')
+                            self.state = self.State.START_ASSEMBLING
+                            continue
                     else:
                         break
                     result = True
                     break
+                case self.State.LEFT_FULL_RIGHT_FULL_SAME_COMPONENT:
+                    _logger.info(f'Worker ({self}) is holding the same component in both hands. Trying to swap with one on the assembly line ...')
+                    if self._swap():
+                        _logger.debug(f'Worker ({self}) swapped the component in one of the hands with the one on the conveyor belt')
+                        self.state = self.State.START_ASSEMBLING
+                        continue
+                    else:
+                        _logger.debug(f'Worker ({self}) failed to swap the component in the hands with the one on the conveyor belt. Waiting ...')
+                        break
+                    assert False, f'Invalid state: {self.state}'
                 case _:
                     assert False, f'Invalid state: {self.state}'
                     break
@@ -207,9 +247,11 @@ class Worker:
         Try to pick up a component with the left hand.
         :return: True if the worker picked up a component, False otherwise.
         """
-        if self.left_hand == EMPTY and self.slots[self.index] != EMPTY:
+        c: str = self.slots[self.index]
+        if self.left_hand == EMPTY and c != EMPTY and c != FINISHED:
             self.left_hand = self.slots[self.index]
             self.slots[self.index] = EMPTY
+            self.touched[self.index] = True
             return True
         return False
 
@@ -218,9 +260,11 @@ class Worker:
         Try to pick up a component with the right hand.
         :return: True if the worker picked up a component, False otherwise.
         """
-        if self.right_hand == EMPTY and self.slots[self.index] != EMPTY and self.slots[self.index] != self.left_hand:
+        c: str = self.slots[self.index]
+        if self.right_hand == EMPTY and c != EMPTY and c != self.left_hand and c != FINISHED:
             self.right_hand = self.slots[self.index]
             self.slots[self.index] = EMPTY
+            self.touched[self.index] = True
             return True
         return False
 
@@ -241,18 +285,56 @@ class Worker:
             return True
         return False
 
+    def _swap(self) -> bool:
+        """
+        Try to swap the components in the hands with the component in the slot.
+        :return: True if the worker swapped the components, False otherwise.
+        """
+        c = self.slots[self.index]
+        if self.right_hand == FINISHED and c != FINISHED or self.left_hand == self.right_hand and (c != self.left_hand or c != self.right_hand) and c != FINISHED:
+            assert self.left_hand != EMPTY or self.right_hand != EMPTY
+            if c != self.right_hand:
+                self.slots[self.index] = self.right_hand
+                self.right_hand = c
+            elif c != self.left_hand:
+                self.slots[self.index] = self.left_hand
+                self.left_hand = c
+            else:
+                assert False, f'Invalid state: {self.left_hand}, {self.right_hand}, {c}'
+            assert self.left_hand != FINISHED and self.right_hand != FINISHED
+            self.touched[self.index] = True
+            if self.left_hand == EMPTY and self.right_hand != EMPTY:
+                self.left_hand = self.right_hand
+                self.right_hand = EMPTY
+            return True
+        return False
+
 
 class WorkerPair:
     """
     A pair of workers, one going up and the other going down compared to the conveyor belt.
     """
 
-    def __init__(self, index: int, slots: list[str]):
-        self.up = Worker(index, Worker.UP, slots)
-        self.down = Worker(index, Worker.DOWN, slots)
+    def __init__(self, index: int, slots: list[str], touched: list[bool]):
+        """
+        Create a pair of workers.
+        :param index: the position of the workers on the conveyor belt. 0 means the first slot.
+        :param slots: the list of components (or empty slots) on the conveyor belt.
+        :param touched: the list of flags indicating whether the corresponding slot has been touched by the worker or not.
+        """
+        self.up = Worker(index, Worker.UP, slots, touched)
+        self.down = Worker(index, Worker.DOWN, slots, touched)
 
     def __str__(self):
-        return f'{self.up}/{self.down}'
+        return f'{self.up}/=/{self.down}'
+
+    @property
+    def priority(self) -> int:
+        """
+        Get the priority of the worker pair.
+        :return: the priority of the worker pair.
+        """
+        return self.up.priority * self.down.priority
 
     def work(self) -> bool:
         """

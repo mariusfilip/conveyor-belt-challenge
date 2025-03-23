@@ -44,11 +44,12 @@ if args.fill:
 
 # Run the simulation
 result, changes = b.work(args.number)
+in_progress: dict[str, int] = b.get_in_progress()
 
 # Print the results
-print(f"Number of finished produced in {args.number} ticks: {result[FINISHED]}")
-print(f"Number of conveyor belt changes in {args.number} ticks: {changes}")
+print(f"Number of finished products generated in {args.number} ticks: {result[FINISHED]}")
 for c, n in result.items():
     if c != FINISHED:
-        print(f"Number of '{c}' produced produced in {args.number} ticks: {n}")
+        print(f"Number of '{c}' components untouched by any worker (generated or still on the belt): {n + in_progress[c]}")
+print(f"Number of conveyor belt changes in {args.number} ticks: {changes}")
 print("Done.")
