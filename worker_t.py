@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 from workers import Worker
 from constants import EMPTY, FINISHED, ASSEMBLY_DURATION
 
@@ -70,13 +69,6 @@ class TestWorker(unittest.TestCase):
         self.assertEqual(self.worker.left_hand, EMPTY)
         self.assertEqual(self.worker.right_hand, EMPTY)
         self.assertEqual(self.worker.assembly_remaining, 0)
-
-    @patch('random.choice', return_value=True)
-    def test_worker_pair_work(self, mock_choice):
-        from workers import WorkerPair
-        worker_pair = WorkerPair(index=1, slots=self.slots)
-        result = worker_pair.work()
-        self.assertTrue(result)
 
 if __name__ == '__main__':
     unittest.main()

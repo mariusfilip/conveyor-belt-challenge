@@ -204,9 +204,10 @@ class WorkerPair:
         Make the workers work.
         :return: True if any of the workers changed the assembly line, False otherwise.
         """
-        workers: list[Worker] = [self.up, self.down] if random.choice([True, False]) else [self.down, self.up]
+        workers: list[Worker] = [self.up, self.down]
+        shuffled: list[Worker] = random.sample(workers, len(workers))
         result: bool = False
-        for worker in workers:
+        for worker in shuffled:
             if worker.work():
                 result = True
                 break
