@@ -14,8 +14,9 @@ class Belt:
     _CHOICES: str = COMPONENTS + EMPTY
     UPPER_SEP: str = '+'
     LOWER_SEP: str = '~'
+    DEFAULT_OFFSET: int = 2
 
-    def __init__(self, size: int, pretty_print: bool = False, offset: int = 2):
+    def __init__(self, size: int, pretty_print: bool = False, offset: int = DEFAULT_OFFSET):
         """
         Create a new belt.
         :param size: the number of slots in the belt.
@@ -114,28 +115,35 @@ class Belt:
         :return:
         """
         if self.pretty_print:
+            if tick == 0:
+                print("")
             w: int = 0
             char_matrix: list[list[str]] = self._get_char_matrix()
             lines: list[str] = [''.join(row) for row in char_matrix]
             if tick > 0:
-                print(f'Tick {tick}:')
+                s = f'Tick {tick}'
+                print(s)
+                print('-' * len(s))
+                print("")
             else:
-                print('Initial state:')
-            if inserted != EMPTY:
-                s: str = f'Inserted: {inserted}'
+                print('Initial state:\n')
+            if tick > 0:
+                s: str = f'Inserted: {inserted if inserted != EMPTY else "nothing"}'
                 print(s)
                 w = max(w, len(s))
             for line in lines:
                 print(' ' * self.offset + line)
                 w = max(w, self.offset + len(line))
-            if generated != EMPTY:
-                s: str = f'Generated: {generated}'
-                if generated != FINISHED:
+            if tick > 0:
+                s: str = f'Generated: {generated if generated != EMPTY else "nothing"}'
+                if generated != FINISHED and generated != EMPTY:
                     s += f' (touched by a worker: {touched})'
                 print(s)
                 w = max(w, len(s))
-            if tick + 1 < ticks:
+            if tick < ticks:
+                print("")
                 print('=' * w)
+                print("")
 
     def _get_char_matrix(self) -> list[list[str]]:
         """
