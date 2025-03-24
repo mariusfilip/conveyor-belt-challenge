@@ -204,3 +204,13 @@ There are three essential classes within this application:
   - For example, components `ABCDE` may produce product `F` (with `ABC`) or product `G` (with `DE`)
 - **Duration of assembly:** it is relatively easy to customise the duration of assembly per type of finite product or by other criteria
 - **Worker behaviour:** given that workers are state machines, altering their behaviour is relatively easy by providing for more states and more state transitions
+
+## Using AI
+
+This challenge has been resolved with the help of AI, as follows:
+- [Microsoft Copilot](https://copilot.microsoft.com/) as a substitute for Google/Bing, to find out about various Python APIs (such as `argparse`)
+- [GitHub Copilot for PyCharm](https://plugins.jetbrains.com/plugin/17718-github-copilot) to generate:
+  - Function and class docstrings and comments
+  - Unit tests
+
+This `README.md` file was edited in Visual Studio Code with the `Markdown All in One` plugin.
