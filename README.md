@@ -71,7 +71,7 @@ python main.py
 The application supports customisation via command line parameters. Run `python main.py -h` for help:
 
 ```bash
-usage: Conveyor Belt Challenge [-h] [-p] [-o OFFSET] [-n NUMBER] [-s SIZE] [-r RAND] [-f] [-v] [-d]
+usage: python main.py [-h] [-p] [-o OFFSET] [-n NUMBER] [-s SIZE] [-r RAND] [-f] [-v] [-d]
 
 Simulation of a conveyor belt that assembles components into finished products. See ./README.md for full requirements.
 
