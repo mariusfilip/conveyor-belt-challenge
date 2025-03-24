@@ -10,7 +10,8 @@ class TestWorker(unittest.TestCase):
 
     def setUp(self):
         self.slots = [EMPTY, 'A', 'B', EMPTY]
-        self.worker = Worker(index=1, pos=Worker.UP, slots=self.slots)
+        self.touched = [False, False, False, False]
+        self.worker = Worker(index=1, pos=Worker.UP, slots=self.slots, touched=self.touched)
 
     def tearDown(self):
         self.slots = None

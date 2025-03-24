@@ -11,7 +11,8 @@ class TestWorkerPair(unittest.TestCase):
 
     def setUp(self):
         self.slots = [EMPTY, 'A', 'B', EMPTY]
-        self.worker_pair = WorkerPair(index=1, slots=self.slots)
+        self.touched = [False, False, False, False]
+        self.worker_pair = WorkerPair(index=1, slots=self.slots, touched=self.touched)
         self.org_seed = random.randint(1, 1000000)
         random.seed(9691)
 
