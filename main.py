@@ -8,7 +8,7 @@ DEFAULT_ITER_NUM: int = 100
 DEFAULT_SIZE: int = 3
 
 # Create the parser
-parser = argparse.ArgumentParser(prog="Conveyor Belt Challenge",
+parser = argparse.ArgumentParser(prog="python main.py",
                                  description="Simulation of a conveyor belt that assembles components into finished products. "
                                              "See ./README.md for full requirements.",
                                  epilog="If this program does not work, check README.md and also run main_t.py.")
